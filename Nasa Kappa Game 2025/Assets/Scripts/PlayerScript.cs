@@ -3,10 +3,13 @@ using UnityEngine;
 [RequireComponent(typeof(Rigidbody2D))]
 public class PlayerScript : MonoBehaviour
 {
-    public float speed = 5f;
+    [SerializeField] private float speed = 10f;
+    public int money = 5000;
 
     Rigidbody2D rb;
     Vector2 input;
+
+
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
