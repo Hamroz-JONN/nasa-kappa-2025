@@ -1,25 +1,30 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class PlantScript : MonoBehaviour
 {
-    public int growthStage = 1; // 0 - nothing; 1 - unripe; 2 - almost done; 3 - ripe
-    private float lifetime = 0;
-
     private SpriteRenderer SR;
-
-    public float totalHealth;
-    
+    public UsableLandScript land;
 
     // [SerializeField] private List<Sprite> growthStageSprites;
     [SerializeField] private Sprite[] growthStageSprites = new Sprite[5];
+
+    public int growthStage; // 0 - nothing; 1 - unripe; 2 - almost done; 3 - ripe
+    private float lifetime;
+
+    public float nutrientRequirementsMet = 1; // the more away from 1, the more imperfect
+    private bool hasWater;
+
+    public float plantQuality;
 
     void Awake()
     {
         growthStage = 1;
         lifetime = 0;
-        totalHealth = 80;
         SR = GetComponent<SpriteRenderer>();
+
+        hasWater = true;
     }
 
     public void Init()
@@ -29,13 +34,20 @@ public class PlantScript : MonoBehaviour
 
     void Update()
     {
-        // transform.localScale()
-
         lifetime += Time.deltaTime;
 
-        if (growthStage < 3 && lifetime >= growthStage*5) {
+        if (growthStage < 3 && lifetime >= growthStage * 5)
+        {
             Debug.Log("Growth stage is now:" + growthStage);
             SR.sprite = growthStageSprites[++growthStage];
+        }
+    }
+
+    public void SimOneDay()
+    {
+        if (hasWater == false)
+        {
+            plantQuality -= 5;
         }
     }
 }
