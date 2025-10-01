@@ -9,8 +9,6 @@ public class PlayerScript : MonoBehaviour
     Rigidbody2D rb;
     Vector2 input;
 
-
-
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {

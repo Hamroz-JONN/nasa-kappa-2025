@@ -3,26 +3,16 @@ using UnityEngine;
 
 public class UsableLandScript : MonoBehaviour
 {
-    // when player approaches this object, they may plant something. 
-    // this object needs to handle initialization process, and the growth is gonna be handled by plant
-
-    public GameObject player;
-    public PlayerScript playerScript;
-
-    public GameObject carrot, wheat, corn;
-
-    public GameObject currentPlant = null;
-    public PlantScript currentPlantScript = null;
-
     // Units
-    int kgSoilPerM2 = 260;
-    int NitrogenMgPerM2 = 13000;
+    // int kgSoilPerM2 = 260;
+    // int NitrogenMgPerM2 = 13000;
 
-    int ppmOfNutrientsPerFert = 10;
+    // int ppmOfNutrientsPerFert = 10;
 
-    int KG_SOIL_PER_M2 = 260;
-    int BLOCK_AREA = 72;
-    int KG_SOIL_PER_BLOCK = 18720;
+    // int KG_SOIL_PER_M2 = 260;
+    // int BLOCK_AREA = 72;
+    // int KG_SOIL_PER_BLOCK = 18720;
+
     // recommended values
     // 280800 min - 936000mg - max 3.7e6 nitrogen per block
     // 187200 min - 936000mg - max 5.6e6 phosphorus per block
@@ -33,21 +23,30 @@ public class UsableLandScript : MonoBehaviour
     // int needP_g_perDay = 2;
     // int needK_g_perDay = 8;
 
-    // 33
-    // 6
-    // 24
-    // for 3 days, total of 63g of nutrients is consumed
+    ////////////////////////////////////////////////////////////////////////////////////////////////
 
-    // public int nitrogen_mg = 
+    // when player approaches this object, they may plant something. 
+    // this object needs to handle initialization process, and the growth is gonna be handled by plantScript
 
-    // float fertMg = 210;
+    GameObject player;
+    PlayerScript playerScript;
+
+    public GameObject carrot, wheat, corn;
+
+    public GameObject currentPlant = null;
+    public PlantScript currentPlantScript = null;
+
+    WaterReservoir waterReservoirScript;
+
+
+
 
     // Nutrition variables in mg per 1 kg of soil
     // begins with poor values
-                                    // worst value - perfect value - max value
-    public int ppm_nitrogen = 26; // 15 - 50 - 200
-    public int ppm_phosphorus = 17; // 10 - 50 - 300 
-    public int ppm_potassium = 210; // 150 - 300 - 1000
+    // worst value - perfect value - max value
+    public float ppm_nitrogen = 26; // 15 - 50 - 200
+    public float ppm_phosphorus = 17; // 10 - 50 - 300 
+    public float ppm_potassium = 210; // 150 - 300 - 1000
 
     // 100 is ideal. the more far, the more bad for plant
     // will decrease by time and by nutrientRetention
@@ -67,13 +66,16 @@ public class UsableLandScript : MonoBehaviour
     int coverCropPrice = 15;
 
     float _t = 0; // sec passed until last day
-    int secPerDay = 5;
+    int secPerDay = 5; // should be same as WaterReservoir.secPerDay
+
+    int fertEmission = 0;
 
     void Awake()
     {
         player = GameObject.FindWithTag("Player");
         playerScript = player.GetComponent<PlayerScript>();
-        Debug.Log(playerScript.money);
+
+        waterReservoirScript = GameObject.FindGameObjectWithTag("Reservoir").GetComponent<WaterReservoir>();
     }
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
@@ -94,34 +96,34 @@ public class UsableLandScript : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.P))
         {
+            waterReservoirScript.areaPlanted += (int)(transform.localScale.x * transform.localScale.y);
             Plant(carrot);
         }
         if (Input.GetKeyDown(KeyCode.H))
         {
+            waterReservoirScript.areaPlanted -= (int)(transform.localScale.x * transform.localScale.y);
             HarvestAndSell();
         }
 
         if (playerScript.money >= fertPrize && (Input.GetKeyDown(KeyCode.Alpha1) || Input.GetKeyDown(KeyCode.Keypad1))) // type 1 1 5
         {
             playerScript.money -= fertPrize;
-            ppm_nitrogen += 43;
-            ppm_phosphorus += 43;
-            ppm_potassium += 214;
+            ppm_nitrogen += 43; ppm_phosphorus += 43; ppm_potassium += 214;
+            fertEmission += 6;
         }
         if (playerScript.money >= fertPrize && (Input.GetKeyDown(KeyCode.Alpha2) || Input.GetKeyDown(KeyCode.Keypad2))) // type 1 3 6
         {
             playerScript.money -= fertPrize;
-            ppm_nitrogen += 30;
-            ppm_phosphorus += 90;
-            ppm_potassium += 180;
+            ppm_nitrogen += 30; ppm_phosphorus += 90; ppm_potassium += 180;
+            fertEmission += 3;
         }
         if (playerScript.money >= fertPrize && (Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3))) // type 2 1 1
         {
             playerScript.money -= fertPrize;
-            ppm_nitrogen += 150;
-            ppm_phosphorus += 75;
-            ppm_potassium += 75;
+            ppm_nitrogen += 150; ppm_phosphorus += 75; ppm_potassium += 75;
+            fertEmission += 10;
         }
+
         if (Input.GetKeyDown(KeyCode.Alpha9) || Input.GetKeyDown(KeyCode.Keypad9)) // buy soilRetention
         {
             if (playerScript.money >= coverCropPrice)
@@ -130,15 +132,34 @@ public class UsableLandScript : MonoBehaviour
                 nutrientRetention += 0.001f;
             }
         }
-        if (Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3)) // type 1 1 5
-        {
-
-        }
     }
 
     void SimOneDay()
     {
         currentPlantScript.SimOneDay();
+    }
+
+    public void SimRain()
+    {
+        
+    }
+
+    public void SimRunoff()
+    {
+        ppm_nitrogen *= nutrientRetention * nutrientRetention;
+        ppm_phosphorus *= nutrientRetention * nutrientRetention;
+        ppm_potassium *= nutrientRetention * nutrientRetention;
+        // how much should nutrients decrease? is this good?
+        if (currentPlant == null) // not planted
+        {
+
+        }
+        else if (currentPlant != null) // planted
+        {
+            // talk with Bach how much should health of plant decrease
+            // how to calculate sustainability bar based on nutrient levels
+        }
+        // currentPlantScript
     }
 
     private void OnTriggerEnter2D(Collider2D other)
@@ -151,7 +172,7 @@ public class UsableLandScript : MonoBehaviour
 
     private void OnTriggerExit2D(Collider2D other)
     {
-        if (other.name == "Player")
+        if (other.name == "Player") 
         {
             interactable = false;
         }

@@ -15,7 +15,7 @@ GameObject:
   - component: {fileID: 9157545541685321804}
   m_Layer: 0
   m_Name: Usable Land Big
-  m_TagString: Untagged
+  m_TagString: Ground
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -158,9 +158,10 @@ MonoBehaviour:
   corn: {fileID: 0}
   currentPlant: {fileID: 0}
   currentPlantScript: {fileID: 0}
-  soilHealth: 67
-  nutritionLevel: 67
-  waterLevel: 67
+  ppm_nitrogen: 26
+  ppm_phosphorus: 17
+  ppm_potassium: 210
+  nutrientRetention: 0.97
   interactable: 0
 --- !u!61 &9157545541685321804
 BoxCollider2D:
