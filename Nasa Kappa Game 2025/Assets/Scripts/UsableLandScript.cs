@@ -32,29 +32,21 @@ public class UsableLandScript : MonoBehaviour
     PlayerScript playerScript;
 
     public GameObject carrot, wheat, corn;
+    string previousPlantName = "";
 
     public GameObject currentPlant = null;
+
     public PlantScript currentPlantScript = null;
 
     WaterReservoir waterReservoirScript;
 
-
-
-
     // Nutrition variables in mg per 1 kg of soil
     // begins with poor values
     // worst value - perfect value - max value
-    public float ppm_nitrogen = 26; // 15 - 50 - 200
-    public float ppm_phosphorus = 17; // 10 - 50 - 300 
-    public float ppm_potassium = 210; // 150 - 300 - 1000
+    public float ppm_nitrogen = 15; // 15 - 50 - 200
+    public float ppm_phosphorus = 5; // 10 - 50 - 300 
+    public float ppm_potassium = 5; // 150 - 300 - 1000
 
-    // 100 is ideal. the more far, the more bad for plant
-    // will decrease by time and by nutrientRetention
-    float nutrientConsumptionPerDay = 1f;
-
-    // out of 100, how great the soil retains the nutrients. 
-    // 100 - doesnt lose a single bit even in runoff and doesnt even decrease, 
-    // 50 - will lose half of what it has in runoff. can never decrease and always <100
     public float nutrientRetention = 0.97f; // 0.97 - after 10 days nutrient level goes from 100 to 73
 
     // 20 secs for plant to reach its max growth
@@ -65,63 +57,72 @@ public class UsableLandScript : MonoBehaviour
     int fertPrize = 10;
     int coverCropPrice = 15;
 
-    float _t = 0; // sec passed until last day
-    int secPerDay = 5; // should be same as WaterReservoir.secPerDay
+    float _t = 0; // sec passed since creation
+    int daysPassed = 0;
+    float secPerDay = 0.25f; // should be same as WaterReservoir.secPerDay
 
-    int fertEmission = 0;
+    EnvironmentScript environment;
 
-    void Awake()
+    void Start()
     {
         player = GameObject.FindWithTag("Player");
         playerScript = player.GetComponent<PlayerScript>();
-
         waterReservoirScript = GameObject.FindGameObjectWithTag("Reservoir").GetComponent<WaterReservoir>();
-    }
 
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
-    {
+        environment = GameObject.FindGameObjectWithTag("Env").GetComponent<EnvironmentScript>();
 
+        currentPlant = null;
     }
 
     // Update is called once per frame
     void Update()
     {
         _t += Time.deltaTime;
-        if (_t > secPerDay)
+
+        if (_t > daysPassed * secPerDay)
         {
-            _t = 0;
+            daysPassed += 1;
             SimOneDay();
         }
 
         if (Input.GetKeyDown(KeyCode.P))
         {
-            waterReservoirScript.areaPlanted += (int)(transform.localScale.x * transform.localScale.y);
             Plant(carrot);
         }
+        if (Input.GetKeyDown(KeyCode.N))
+        {
+            // Plant(carrot);
+        }
+        if (Input.GetKeyDown(KeyCode.M))
+        {
+            // Plant(carrot);
+        }
+
         if (Input.GetKeyDown(KeyCode.H))
         {
-            waterReservoirScript.areaPlanted -= (int)(transform.localScale.x * transform.localScale.y);
             HarvestAndSell();
         }
 
-        if (playerScript.money >= fertPrize && (Input.GetKeyDown(KeyCode.Alpha1) || Input.GetKeyDown(KeyCode.Keypad1))) // type 1 1 5
+        if (currentPlant == null && playerScript.money >= fertPrize)
         {
-            playerScript.money -= fertPrize;
-            ppm_nitrogen += 43; ppm_phosphorus += 43; ppm_potassium += 214;
-            fertEmission += 6;
-        }
-        if (playerScript.money >= fertPrize && (Input.GetKeyDown(KeyCode.Alpha2) || Input.GetKeyDown(KeyCode.Keypad2))) // type 1 3 6
-        {
-            playerScript.money -= fertPrize;
-            ppm_nitrogen += 30; ppm_phosphorus += 90; ppm_potassium += 180;
-            fertEmission += 3;
-        }
-        if (playerScript.money >= fertPrize && (Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3))) // type 2 1 1
-        {
-            playerScript.money -= fertPrize;
-            ppm_nitrogen += 150; ppm_phosphorus += 75; ppm_potassium += 75;
-            fertEmission += 10;
+            if (Input.GetKeyDown(KeyCode.Alpha1) || Input.GetKeyDown(KeyCode.Keypad1)) // type 1 1 5
+            {
+                playerScript.money -= fertPrize;
+                ppm_nitrogen += 43; ppm_phosphorus += 43; ppm_potassium += 214;
+                environment.emissionKg += 6;
+            }
+            if (Input.GetKeyDown(KeyCode.Alpha2) || Input.GetKeyDown(KeyCode.Keypad2)) // type 1 3 6
+            {
+                playerScript.money -= fertPrize;
+                ppm_nitrogen += 30; ppm_phosphorus += 90; ppm_potassium += 180;
+                environment.emissionKg += 3;
+            }
+            if (Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3)) // type 2 1 1
+            {
+                playerScript.money -= fertPrize;
+                ppm_nitrogen += 150; ppm_phosphorus += 75; ppm_potassium += 75;
+                environment.emissionKg += 10;
+            }
         }
 
         if (Input.GetKeyDown(KeyCode.Alpha9) || Input.GetKeyDown(KeyCode.Keypad9)) // buy soilRetention
@@ -134,33 +135,86 @@ public class UsableLandScript : MonoBehaviour
         }
     }
 
-    void SimOneDay()
-    {
-        currentPlantScript.SimOneDay();
-    }
+    void SimOneDay() {
+        if (currentPlant != null) {
+            currentPlantScript.SimOneDay(
+                haswater: (waterReservoirScript.currentWaterLevel > 0f) ? 1 : 0,
+                isDrought: (_t < environment.droughtUntil) ? 1 : 0,
+                isRunoff: (_t < environment.runoffUntill) ? 1 : 0,
+                biome: PlayerPrefs.GetString("biome"))
+                ;
 
-    public void SimRain()
-    {
-        
-    }
-
-    public void SimRunoff()
-    {
-        ppm_nitrogen *= nutrientRetention * nutrientRetention;
-        ppm_phosphorus *= nutrientRetention * nutrientRetention;
-        ppm_potassium *= nutrientRetention * nutrientRetention;
-        // how much should nutrients decrease? is this good?
-        if (currentPlant == null) // not planted
-        {
-
+            // to-do after Bach's code is integrated into PlantScript, make it use the following data from my code:
+            //  1. soil retention and nutrient ppms from this script
+            //  2. amount runned off from EnvironmentScript and add accordingly to it.
         }
-        else if (currentPlant != null) // planted
-        {
-            // talk with Bach how much should health of plant decrease
-            // how to calculate sustainability bar based on nutrient levels
-        }
-        // currentPlantScript
     }
+
+    //  planting features
+    void Plant(GameObject plant)
+    {
+        if (!interactable)
+        {
+            return;
+        }
+        if (currentPlant != null)
+        {
+            Debug.Log("Land occupied.");
+            return;
+        }
+
+        waterReservoirScript.areaPlanted += (int)(transform.localScale.x * transform.localScale.y);
+
+        playerScript.money -= 75; // maybe different cost for each plant
+
+        currentPlant = Instantiate(plant, transform);
+        currentPlant.transform.SetParent(transform);
+
+        currentPlantScript = currentPlant.GetComponent<PlantScript>();
+        currentPlantScript.land = this;
+
+        // currentPlantScript.environment = environment;
+        currentPlantScript.Init(
+            isMonocrop: (previousPlantName == plant.tag) ? 1 : 0, 
+            biome:""
+            // EnvironmentScript.ClimateClassifier.Classify(
+            //     PlayerPrefs.GetFloat("TheLat"),
+            //     PlayerPrefs.GetFloat("TheLon"))
+                );
+        // currentPlantScript.Init();
+        Debug.Log("Planted!");
+    }
+
+    public void PlantFinishedGrowing()
+    {
+        waterReservoirScript.areaPlanted -= (int)(transform.localScale.x * transform.localScale.y);
+    }
+
+    void HarvestAndSell()
+    {
+        if (!interactable)
+        {
+            return;
+        }
+        if (currentPlant == null)
+        {
+            Debug.Log("Nothing to harvest.");
+            return;
+        }
+
+        int price = (int)currentPlantScript.cropquality*100;
+
+        playerScript.money += price;
+        Debug.Log("Sold for " + price);
+
+        previousPlantName = currentPlant.tag;
+
+        Destroy(currentPlant);
+        currentPlant = null;
+        currentPlantScript = null;
+    }
+
+    // hitbox features
 
     private void OnTriggerEnter2D(Collider2D other)
     {
@@ -176,55 +230,5 @@ public class UsableLandScript : MonoBehaviour
         {
             interactable = false;
         }
-    }
-
-    // handles the planting process
-    void Plant(GameObject plant)
-    {
-        if (!interactable)
-        {
-            return;
-        }
-        if (currentPlant != null)
-        {
-            Debug.Log("Land occupied.");
-            return;
-        }
-
-        playerScript.money -= 75; // maybe different cost for each plant
-
-        Debug.Log("Plant attempt");
-        currentPlant = Instantiate(plant, transform);
-        currentPlant.transform.SetParent(transform);
-        currentPlantScript = currentPlant.GetComponent<PlantScript>();
-        currentPlantScript.land = this;
-
-        // currentPlantScript.nutrientRequirementsMet = 
-        currentPlantScript.plantQuality = 100f * currentPlantScript.nutrientRequirementsMet;
-
-        currentPlantScript.Init();
-        Debug.Log("Planted!");
-    }
-
-    void HarvestAndSell()
-    {
-        if (!interactable)
-        {
-            return;
-        }
-        if (currentPlant == null)
-        {
-            Debug.Log("Nothing to harvest.");
-            return;
-        }
-
-        float growthRatio = currentPlantScript.growthStage / 7f;
-        int price = Mathf.RoundToInt(growthRatio * currentPlantScript.plantQuality);
-
-        playerScript.money += price;
-        Debug.Log("Sold for " + price);
-        Destroy(currentPlant);
-        currentPlant = null;
-        currentPlantScript = null;
     }
 }

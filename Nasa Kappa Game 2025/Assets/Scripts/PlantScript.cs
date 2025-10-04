@@ -1,53 +1,361 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Linq;
 
 public class PlantScript : MonoBehaviour
 {
-    private SpriteRenderer SR;
-    public UsableLandScript land;
+    /// /// /// BELOW ARE Bach's VARIABLES 💻💻💻
 
-    // [SerializeField] private List<Sprite> growthStageSprites;
-    [SerializeField] private Sprite[] growthStageSprites = new Sprite[5];
+    int current_day;
+    List<Dictionary<string, string>> weather_data = new List<Dictionary<string, string>>();
+    double RUE; // Radiation use efficiency (grams / MJ /Day)
+    double PAR; // Photosynthetic active radiation (MJ/M^2/Day)
+    double IPAR; // intercepted radiation
+    double LAI; // Leaf area (Plant leaf M^2/M^2)
+    double BioMass;
+    double k; // const
+    double rainfall; // in mm. Right now doing it as avg rainfall per day.
+    double irrigation; // fixed value for simplicity
+    double temperature; // c
+    double humidity; // %
+    double nutrientusage;
+    double nowaterpenalty;
+    double nonutrientpenalty;
+    double BioMassPerDay;
+    int PlantGrowthStage; // 0 → VE, 6 → harvest
 
-    public int growthStage; // 0 - nothing; 1 - unripe; 2 - almost done; 3 - ripe
-    private float lifetime;
+    //plant specific variables:
+    public double[] ideal = new double[] { 0, 0, 0 };
+    public double RUE_optimum = 0.0;
+    public double T_opt = 0.0;
+    public double H_opt = 0.0;
+    public double min_nitrogen = 0.0;
+    public double min_phosphorus = 0.0;
+    public double min_potassium = 0.0;
+    double water_requirement = 6.0;
 
-    public float nutrientRequirementsMet = 1; // the more away from 1, the more imperfect
-    private bool hasWater;
 
-    public float plantQuality;
+    // INPUT FROM HAMROZ's SIDE
+    double[] nutrients = new double[] { 0, 0, 0 }; // [Nitrogen, Phosphorus, Potassium]
 
-    void Awake()
+    // OUTPUTS TO HAMROZ's SIDE
+    public double cropquality;
+
+    public void SimOneDay(int haswater, int isDrought, int isRunoff,string biome)
     {
-        growthStage = 1;
-        lifetime = 0;
-        SR = GetComponent<SpriteRenderer>();
+        LAI = FINDLAI(BioMass);
+        RUE = FINDRUE(rainfall, irrigation, temperature, humidity);
+        BioMassPerDay = BioMassGain(PAR, RUE, LAI, k);
+        BioMass += BioMassPerDay;
+        
+        // Environment specific water penalty
+        double waterPenaltyFactor = 1.0;
+        switch (biome)
+        {
+            case "arid":     
+                waterPenaltyFactor = 1.6;           
+                break;
 
-        hasWater = true;
+            case "tropical":    
+                waterPenaltyFactor = 0.6;        
+                break;
+
+            case "temperate":     
+                waterPenaltyFactor = 1.0;
+                break;
+
+            case "tundra":     
+                waterPenaltyFactor = 0.8;       
+                break;
+        }
+        
+        if (haswater == 0)
+        {
+            cropquality -= nowaterpenalty * waterPenaltyFactor;
+        }
+        if (isDrought == 1)
+        {
+            cropquality -= 4 * nowaterpenalty*waterPenaltyFactor;
+        }
+
+
+        if (isRunoff == 1)
+        {
+            double loss_factor = (100 - land.nutrientRetention) / 100.0;
+            double[] losses = nutrients.Select(n => n * loss_factor).ToArray();
+            for (int i = 0; i < nutrients.Length; i++)
+            {
+                nutrients[i] -= losses[i];
+            }
+            environment.nutrientPpmRunoffed += (float)losses.Sum();
+        }
+        else
+        {
+            double usecompound = 1 + (100 - land.nutrientRetention) / 1000.0;
+            for (int i = 0; i < nutrients.Length; i++)
+            {
+                nutrients[i] = nutrients[i] - nutrientusage * usecompound;
+            }
+
+            if (BioMass < 50)
+            {
+                PlantGrowthStage = 0;
+            }
+            else if (BioMass < 150)
+            {
+                PlantGrowthStage = 1;
+            }
+            else if (BioMass < 400)
+            {
+                PlantGrowthStage = 2;
+            }
+            else if (BioMass < 800)
+            {
+                PlantGrowthStage = 3;
+            }
+            else if (BioMass < 1200)
+            {
+                PlantGrowthStage = 4;
+            }
+            else if (BioMass < 2000)
+            {
+                PlantGrowthStage = 5;
+            }
+            else
+            {
+                PlantGrowthStage = 6;
+                land.PlantFinishedGrowing();
+            }
+        }
     }
 
-    public void Init()
+    public void simulation_init(int isMonocrop, string biome)
     {
-        SR.sprite = growthStageSprites[growthStage];
+        PAR = 6;
+        k = 0.5;
+        rainfall = 15.0;
+        irrigation = 4.0;
+        temperature = 27.0;
+        humidity = 60;
+        nutrientusage = 0.25;
+        nutrients = new double[] { land.ppm_nitrogen, land.ppm_phosphorus, land.ppm_potassium };
+        cropquality = 1.0;
+        land.nutrientRetention = 90;
+        nowaterpenalty = 0.02;
+        nonutrientpenalty = 0.03;
+
+        (RUE_optimum, T_opt, H_opt, ideal, min_nitrogen, min_phosphorus, min_potassium,water_requirement) = biome switch
+        {
+            "arid" => (1.9, 35.5, 25.0, new double[] { 3, 1.7, 4.5 }, 30.0, 17.0, 45.0,3.0),//sorghum
+            "tropical" => (3.0, 30.0, 55.0, new double[] { 4, 2, 5 }, 36.0, 17.0, 45.0,10.0), // rice
+            "temperate" => (3.8, 27.5, 74.0, new double[] { 5, 1, 1 }, 40.0, 8.0, 8.0,6.0), // corn
+            "tundra" => (1.6, 12.0, 70.0, new double[] { 1, 2, 2 }, 24.0, 48.0, 48.0,4.0), //turnip
+            _ => (3.0, 25.0, 60.0, new double[] { 2, 1, 1 }, 20.0, 10.5, 10.5,5.0) // fallback
+        };
+
+        if (isMonocrop == 1)
+        {
+            land.nutrientRetention -= Math.Max(0, 25);
+        }
+        else
+        {
+            land.nutrientRetention = Math.Min(100, land.nutrientRetention + 15);
+        }
+    }
+
+    /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// ///
+    /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// ///
+    /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// ///
+    /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// ///
+
+    SpriteRenderer SR;
+    public UsableLandScript land;
+
+    public EnvironmentScript environment;
+
+    [SerializeField] private Sprite[] growthStageSprites = new Sprite[5];
+
+    int sprite_G_Stage = 1;
+
+    void Awake() // for local setups
+    {
+        SR = GetComponent<SpriteRenderer>();
+    }
+
+    void Start() // for interdependent setups
+    {
+
+    }
+
+    public void Init(int isMonocrop, string biome)
+    {
+        simulation_init(isMonocrop: isMonocrop, biome:biome);
+
+        sprite_G_Stage = PlantGrowthStage + 1;
+        SR.sprite = growthStageSprites[sprite_G_Stage];
     }
 
     void Update()
     {
-        lifetime += Time.deltaTime;
-
-        if (growthStage < 3 && lifetime >= growthStage * 5)
+        if (sprite_G_Stage != PlantGrowthStage + 1)
         {
-            Debug.Log("Growth stage is now:" + growthStage);
-            SR.sprite = growthStageSprites[++growthStage];
+            sprite_G_Stage = PlantGrowthStage + 1;
+            if (PlantGrowthStage == 6)
+            {
+                SR.sprite = growthStageSprites[4];
+            }
+            if (PlantGrowthStage == 4 || PlantGrowthStage == 5)
+            {
+                SR.sprite = growthStageSprites[3];
+            }
+            if (PlantGrowthStage == 1 || PlantGrowthStage == 2 || PlantGrowthStage == 3)
+            {
+                SR.sprite = growthStageSprites[2];
+            }
+            if (PlantGrowthStage == 0)
+            {
+                SR.sprite = growthStageSprites[1];
+            }
         }
     }
 
-    public void SimOneDay()
+    // Bach's utility functions
+    
+    public string getdata(string filename = "weather.csv")
     {
-        if (hasWater == false)
+        return "Okay";
+        // if (weather_data.Count == 0)
+        // {
+        //     using (var reader = new StreamReader(filename))
+        //     {
+        //         var header = reader.ReadLine().Split(',');
+        //         while (!reader.EndOfStream)
+        //         {
+        //             var line = reader.ReadLine().Split(',');
+        //             var dict = new Dictionary<string, string>();
+        //             for (int i = 0; i < header.Length; i++)
+        //             {
+        //                 dict[header[i]] = line[i];
+        //             }
+        //             weather_data.Add(dict);
+        //         }
+        //     }
+        // }
+
+        // if (current_day >= weather_data.Count)
+        // {
+        //     return null;
+        // }
+
+        // var row = weather_data[current_day];
+        // string csvDate = row["csvDate"];
+
+        // PAR = double.Parse(row["Radiation_PAR (µmol/m²/s)"], CultureInfo.InvariantCulture) / 2.3e5;
+        // rainfall = double.Parse(row["Rainfall (mm)"], CultureInfo.InvariantCulture);
+        // temperature = double.Parse(row["Temperature (°C)"], CultureInfo.InvariantCulture);
+        // humidity = double.Parse(row["Humidity (%)"], CultureInfo.InvariantCulture);
+
+        // current_day += 1;
+        // return csvDate;
+    }
+
+    public double nutrient_scores(double value, double low, double high)
+    {
+        if (value < low)
         {
-            plantQuality -= 5;
+            cropquality -= nonutrientpenalty / 3;
+            return Math.Max(0.0, value / low);
+        }
+        else if (value > high)
+        {
+            return Math.Max(0.0, high / value);
+        }
+        else
+        {
+            return 1.0;
         }
     }
+
+    public double BioMassGain(double PAR, double RUE, double LAI, double k)
+    {
+        double IPAR = PAR * (1 - Math.Exp(-k * LAI));
+        double BioMassPerDay = RUE * IPAR;
+        return BioMassPerDay;
+    }
+
+    public double FINDLAI(double biomass)
+    {
+        double LAI_start = 0.5;
+        double LAI_max = 7.0;
+        double scaling_factor = 0.005;
+
+        double LAI_current = LAI_start + (LAI_max - LAI_start) *
+            (Math.Log(1 + scaling_factor * biomass) / Math.Log(1 + scaling_factor * 1500));
+
+        if (LAI_current > LAI_max)
+        {
+            LAI_current = LAI_max;
+        }
+
+        return LAI_current;
+    }
+
+    public double FINDRUE(double rainfall, double irrigation, double temperature, double humidity)
+    {
+
+        double Nitrogenfactor = nutrient_scores(nutrients[0], min_nitrogen, 1000);
+        double Phosphorusfactor = nutrient_scores(nutrients[1], min_phosphorus, 1000);
+        double Postassiumfactor = nutrient_scores(nutrients[2], min_potassium, 1000);
+        double Rainfactor = nutrient_scores(rainfall, 2, 20);
+
+        double nutrient_factor = Math.Pow(Nitrogenfactor * Phosphorusfactor * Postassiumfactor * Rainfactor, 0.25);
+
+        double total_water = rainfall + irrigation;
+        double water = Math.Min(total_water / water_requirement, 1.0);
+        double water_factor;
+
+        if (water >= 0.5)
+        {
+            water_factor = 1.0;
+        }
+        else
+        {
+            water_factor = Math.Exp(-5 * (0.5 - water));
+        }
+        double[] actual = nutrients;
+        if (actual.Sum() == 0)
+        {
+            nutrient_factor = 0.0;
+        }
+        else
+        {
+            double sumIdeal = ideal.Sum();
+            double sumActual = actual.Sum();
+            double[] ideal_norm = ideal.Select(x => x / sumIdeal).ToArray();
+            double[] actual_norm = actual.Select(x => x / sumActual).ToArray();
+            double diff = 0;
+            for (int i = 0; i < ideal_norm.Length; i++)
+            {
+                diff += Math.Abs(ideal_norm[i] - actual_norm[i]);
+            }
+            nutrient_factor = Math.Max(0.4, 1.0 - diff);
+        }
+
+        double T_range = 15;
+        double temperature_factor = Math.Exp(-Math.Pow((temperature - T_opt) / T_range, 2));
+
+        double H_range = 20;
+        double humidity_factor = Math.Exp(-Math.Pow((humidity - H_opt) / H_range, 2));
+
+        double adjusted_RUE =
+            RUE_optimum *
+            water_factor *
+            nutrient_factor *
+            temperature_factor *
+            humidity_factor;
+
+        return adjusted_RUE;
+    }
+
 }

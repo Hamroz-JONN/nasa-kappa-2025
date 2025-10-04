@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 1216475253092118019}
   m_Layer: 0
   m_Name: Carrot
-  m_TagString: Untagged
+  m_TagString: Carrot
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -103,9 +103,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3f5986fc46b1f448388e37108975e2f8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlantScript
+  land: {fileID: 0}
   growthStageSprites:
   - {fileID: -6265054668056534801, guid: 7ae238f8388334bd7a715dc1cee66b92, type: 3}
   - {fileID: -2273560400057252286, guid: 042bb09fd0f95426da2f0f7bb8299385, type: 3}
   - {fileID: -8520553723163835839, guid: 042bb09fd0f95426da2f0f7bb8299385, type: 3}
   - {fileID: -3593091133011289673, guid: 042bb09fd0f95426da2f0f7bb8299385, type: 3}
   - {fileID: -6784289681022051927, guid: 042bb09fd0f95426da2f0f7bb8299385, type: 3}
+  growthStage: 0
+  nutrientRequirementsMet: 1
+  plantQuality: 0

@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using UnityEngine.UIElements;
+using System.Diagnostics;
 
 public class LakeScript : MonoBehaviour
 {
@@ -16,7 +17,7 @@ public class LakeScript : MonoBehaviour
     private bool interactable = false;
 
     float waterCapacity = 100000f;
-    float waterFlowRate = 500;
+    float waterFlowRate = 30;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
@@ -42,7 +43,7 @@ public class LakeScript : MonoBehaviour
     {
         float reservoirLevel = waterReservoirScript.currentWaterLevel;
 
-        if (currentPipe != null && reservoirLevel < 0.92f)
+        if (currentPipe != null && reservoirLevel < 1f)
         {
             float reservoirCapacity = waterReservoirScript.totalCapacity;
 

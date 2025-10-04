@@ -7,6 +7,8 @@ TagManager:
   - Ground
   - Cloud
   - Reservoir
+  - Env
+  - Carrot
   layers:
   - Default
   - TransparentFX
