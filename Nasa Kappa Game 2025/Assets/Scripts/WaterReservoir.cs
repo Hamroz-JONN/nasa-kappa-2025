@@ -1,8 +1,11 @@
 using System;
 using UnityEngine;
+using TMPro;
 
 public class WaterReservoir : MonoBehaviour
 {
+    public TextMeshProUGUI waterLevelText;
+
     public int areaPlanted = 0;
 
     Transform waterLevelSprite;
@@ -40,7 +43,7 @@ public class WaterReservoir : MonoBehaviour
         {
             _t = 0;
             SimOneDay();
-        }   
+        }
     }
 
     void SimOneDay()
@@ -66,5 +69,7 @@ public class WaterReservoir : MonoBehaviour
 
             previousWaterLevel = currentWaterLevel;
         }
+
+        waterLevelText.text = "Water Level: " + Mathf.Floor(currentWaterLevel * 10000) / 100f;
     }
 }

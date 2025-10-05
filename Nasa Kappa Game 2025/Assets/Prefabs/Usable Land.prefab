@@ -1331,7 +1331,7 @@ BoxCollider2D:
   m_UsedByEffector: 0
   m_CompositeOperation: 0
   m_CompositeOrder: 0
-  m_Offset: {x: 3.9685307, y: 2.0330591}
+  m_Offset: {x: 4.05528, y: 1.94631}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
@@ -1341,7 +1341,7 @@ BoxCollider2D:
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
-  m_Size: {x: 16.95366, y: 12.757429}
+  m_Size: {x: 15.103005, y: 10.675446}
   m_EdgeRadius: 0
 --- !u!114 &3480949823243295624
 MonoBehaviour:
@@ -1355,6 +1355,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9c9217db701bc470ba815909aeab334d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UsableLandScript
+  landInfo: {fileID: 0}
   alfa: {fileID: 8103744886349397481, guid: 7808c2b597d2d4b7bab49add7715ad7e, type: 3}
   wheat: {fileID: 8103744886349397481, guid: fa4b7c85ce70643b38603bce99729c1c, type: 3}
   corn: {fileID: 8103744886349397481, guid: 2a44885190d6042f89d196ff8e714b96, type: 3}

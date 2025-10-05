@@ -94,40 +94,47 @@ public class UsableLandScript : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.P))
         {
             Plant(alfa);
+            UpdateSoilInfo();
         }
         if (Input.GetKeyDown(KeyCode.C))
         {
             Plant(corn);
+            UpdateSoilInfo();
         }
         if (Input.GetKeyDown(KeyCode.M))
         {
             Plant(wheat);
+            UpdateSoilInfo();
         }
 
         if (Input.GetKeyDown(KeyCode.H))
         {
             HarvestAndSell();
+            UpdateSoilInfo();
         }
 
-        if (currentPlant == null && playerScript.money >= fertPrize)
+        if (currentPlant == null && playerScript.money >= fertPrize && interactable)
         {
             if (Input.GetKeyDown(KeyCode.Alpha1) || Input.GetKeyDown(KeyCode.Keypad1)) // type 1 1 5
             {
                 playerScript.money -= fertPrize;
                 ppm_nitrogen += 43; ppm_phosphorus += 43; ppm_potassium += 214;
                 environment.emissionKg += 6;
+                UpdateSoilInfo();
             }
             if (Input.GetKeyDown(KeyCode.Alpha2) || Input.GetKeyDown(KeyCode.Keypad2)) // type 1 3 6
             {
                 playerScript.money -= fertPrize;
                 ppm_nitrogen += 30; ppm_phosphorus += 90; ppm_potassium += 180;
                 environment.emissionKg += 3;
+                UpdateSoilInfo();
             }
             if (Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3)) // type 2 1 1
             {
                 playerScript.money -= fertPrize;
                 ppm_nitrogen += 150; ppm_phosphorus += 75; ppm_potassium += 75;
                 environment.emissionKg += 10;
+                UpdateSoilInfo();
             }
         }
 
@@ -145,11 +152,10 @@ public class UsableLandScript : MonoBehaviour
     {
         if (currentPlant != null)
         {
-            Debug.Log("level of water " + waterReservoirScript.currentWaterLevel);
             currentPlantScript.SimOneDay(
                 haswater: (waterReservoirScript.currentWaterLevel > 0f) ? 1 : 0,
-                isDrought: (_t < environment.droughtUntil) ? 1 : 0,
-                isRunoff: (_t < environment.runoffUntill) ? 1 : 0,
+                isDrought: (environment.lifetime < environment.droughtUntil) ? 1 : 0,
+                isRunoff: (environment.lifetime < environment.runoffUntill) ? 1 : 0,
                 biome: PlayerPrefs.GetString("biome"))
                 ;
 
@@ -178,8 +184,6 @@ public class UsableLandScript : MonoBehaviour
 
         currentPlant = Instantiate(plant, transform);
         currentPlant.transform.SetParent(transform);
-
-        Debug.Log("PLANTED::: " + currentPlant.transform.position + " xx " + currentPlant.activeSelf);
 
         currentPlantScript = currentPlant.GetComponent<PlantScript>();
         currentPlantScript.land = this;
@@ -231,11 +235,25 @@ public class UsableLandScript : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D other)
     {
-        landInfo.text = "Nitrogen PPM: " + ppm_nitrogen + "\nPhosphorus PPM: " + ppm_phosphorus + "\nPotassium PPM: " + ppm_potassium + "\n\nSoil Retention% " + nutrientRetention;
+        UpdateSoilInfo();
         if (other.name == "Player")
         {
             interactable = true;
         }
+    }
+
+    void UpdateSoilInfo()
+    {
+        landInfo.text = "Nitrogen PPM: " + cut2(ppm_nitrogen) + "\nPhosphorus PPM: " + cut2(ppm_phosphorus) + "\nPotassium PPM: " + cut2(ppm_potassium) + "\n\nSoil Retention% " + cut2(nutrientRetention);
+        if (currentPlant != null)
+        {
+            landInfo.text = landInfo.text + "\n\nPlant Quality: " + cut2((float)currentPlantScript.cropquality*100);
+        }
+    }
+
+    int cut2(float x)
+    {
+        return (int)Mathf.Floor(x * 10f) / 10;
     }
 
     private void OnTriggerExit2D(Collider2D other)

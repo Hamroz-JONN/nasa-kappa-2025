@@ -76,7 +76,7 @@ public class PlantScript : MonoBehaviour
     {
         bool isRaining = environment.lifetime <= environment.runoffUntill;
 
-        if (sprite_G_Stage != PlantGrowthStage + 1)
+        // if (sprite_G_Stage != PlantGrowthStage + 1)
         {
             sprite_G_Stage = PlantGrowthStage + 1;
             if (PlantGrowthStage == 6)
@@ -93,6 +93,7 @@ public class PlantScript : MonoBehaviour
             }
             if (PlantGrowthStage == 0)
             {
+                Debug.Log("in herer   " + (!isRaining));
                 SetSprite((!isRaining) ? growthStageSprites[1] : runoffGrowthStageSprites[1]);
             }
         }
@@ -109,7 +110,7 @@ public class PlantScript : MonoBehaviour
     // Bach's functions
 
     public void SimOneDay(int haswater, int isDrought, int isRunoff, string biome)
-    {    
+    {
         LAI = FINDLAI(BioMass);
         RUE = FINDRUE(rainfall, irrigation, temperature, humidity);
         BioMassPerDay = BioMassGain(PAR, RUE, LAI, k);
@@ -144,17 +145,26 @@ public class PlantScript : MonoBehaviour
         {
             cropquality -= 4 * nowaterpenalty * waterPenaltyFactor;
         }
+        cropquality = Math.Max(0, cropquality);
 
-        if (isRunoff == 1)
-        {
+        if (isRunoff == 1) {
             double loss_factor = (100 - land.nutrientRetention) / 100.0;
-            double[] losses = nutrients.Select(n => n * loss_factor).ToArray();
-            for (int i = 0; i < nutrients.Length; i++)
-            {
+
+            double[] losses = new double[nutrients.Length];
+
+            double totalLoss = 0;
+
+            for (int i = 0; i < nutrients.Length; i++) {
+                losses[i] = nutrients[i] * loss_factor;
+
+                totalLoss += losses[i];
+
                 nutrients[i] -= losses[i];
             }
-            environment.nutrientPpmRunoffed += (float)losses.Sum();
+
+            environment.nutrientPpmRunoffed += (float)totalLoss;
         }
+
         if (haswater == 1 && isDrought == 0 && isRunoff == 0)
         {
             BioMass += BioMassPerDay;
@@ -168,23 +178,23 @@ public class PlantScript : MonoBehaviour
             {
                 PlantGrowthStage = 0;
             }
-            else if (BioMass < 150)
+            else if (BioMass < 100)
             {
                 PlantGrowthStage = 1;
             }
-            else if (BioMass < 400)
+            else if (BioMass < 300)
             {
                 PlantGrowthStage = 2;
             }
-            else if (BioMass < 800)
+            else if (BioMass < 400)
             {
                 PlantGrowthStage = 3;
             }
-            else if (BioMass < 1200)
+            else if (BioMass < 500)
             {
                 PlantGrowthStage = 4;
             }
-            else if (BioMass < 2000)
+            else if (BioMass < 600)
             {
                 PlantGrowthStage = 5;
             }
@@ -194,6 +204,10 @@ public class PlantScript : MonoBehaviour
                 land.PlantFinishedGrowing();
             }
         }
+
+        land.ppm_nitrogen = (float)nutrients[0];
+        land.ppm_potassium = (float)nutrients[1];
+        land.ppm_phosphorus = (float)nutrients[2];
     }
 
     public void simulation_init(int isMonocrop, string biome)
