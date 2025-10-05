@@ -16,7 +16,7 @@ public class WaterReservoir : MonoBehaviour
     float secPerDay = 0.25f; // should be same as UsableLandScript.secPerDay
 
     // every day <this> L of water is used for 1 m^2
-    int waterConsumedPerDayPerM2 = 5;
+    float waterConsumedPerDayPerM2 = 0.05f;
 
     EnvironmentScript environment;
 

@@ -2,10 +2,13 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
+using TMPro;
 
 public class PlantScript : MonoBehaviour
 {
     /// /// /// BELOW ARE Bach's VARIABLES 💻💻💻
+    /// 
+    
 
     int current_day;
     List<Dictionary<string, string>> weather_data = new List<Dictionary<string, string>>();
@@ -35,50 +38,112 @@ public class PlantScript : MonoBehaviour
     public double min_potassium = 0.0;
     double water_requirement = 6.0;
 
-
     // INPUT FROM HAMROZ's SIDE
     double[] nutrients = new double[] { 0, 0, 0 }; // [Nitrogen, Phosphorus, Potassium]
 
     // OUTPUTS TO HAMROZ's SIDE
     public double cropquality;
 
-    public void SimOneDay(int haswater, int isDrought, int isRunoff,string biome)
+    /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// ///
+    /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// ///
+    /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// ///
+    /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// ///
+
+    public UsableLandScript land;
+
+    public EnvironmentScript environment;
+
+    [SerializeField][Header("Runoff Growth-Stage Sprites")] private Sprite[] runoffGrowthStageSprites = new Sprite[5];
+    [SerializeField][Header("Growth-Stage Sprites")] private Sprite[] growthStageSprites = new Sprite[5];
+    [SerializeField][Header("Tiles (those 3x2)")] private SpriteRenderer[] tiles = new SpriteRenderer[6];
+
+    int sprite_G_Stage;
+
+    void Start() // for interdependent setups
     {
+
+    }
+
+    public void Init(int isMonocrop, string biome)
+    {
+        simulation_init(isMonocrop: isMonocrop, biome: biome);
+
+        sprite_G_Stage = PlantGrowthStage + 1;
+        SetSprite(growthStageSprites[1]);
+    }
+
+    void Update()
+    {
+        bool isRaining = environment.lifetime <= environment.runoffUntill;
+
+        if (sprite_G_Stage != PlantGrowthStage + 1)
+        {
+            sprite_G_Stage = PlantGrowthStage + 1;
+            if (PlantGrowthStage == 6)
+            {
+                SetSprite((!isRaining) ? growthStageSprites[4] : runoffGrowthStageSprites[4]);
+            }
+            if (PlantGrowthStage == 4 || PlantGrowthStage == 5)
+            {
+                SetSprite((!isRaining) ? growthStageSprites[3] : runoffGrowthStageSprites[3]);
+            }
+            if (PlantGrowthStage == 1 || PlantGrowthStage == 2 || PlantGrowthStage == 3)
+            {
+                SetSprite((!isRaining) ? growthStageSprites[2] : runoffGrowthStageSprites[2]);
+            }
+            if (PlantGrowthStage == 0)
+            {
+                SetSprite((!isRaining) ? growthStageSprites[1] : runoffGrowthStageSprites[1]);
+            }
+        }
+    }
+
+    void SetSprite(Sprite to)
+    {
+        for (int i = 0; i < 6; i++)
+        {
+            tiles[i].sprite = to;
+        }
+    }
+
+    // Bach's functions
+
+    public void SimOneDay(int haswater, int isDrought, int isRunoff, string biome)
+    {    
         LAI = FINDLAI(BioMass);
         RUE = FINDRUE(rainfall, irrigation, temperature, humidity);
         BioMassPerDay = BioMassGain(PAR, RUE, LAI, k);
-        BioMass += BioMassPerDay;
-        
+
+
         // Environment specific water penalty
         double waterPenaltyFactor = 1.0;
         switch (biome)
         {
-            case "arid":     
-                waterPenaltyFactor = 1.6;           
+            case "arid":
+                waterPenaltyFactor = 1.6;
                 break;
 
-            case "tropical":    
-                waterPenaltyFactor = 0.6;        
+            case "tropical":
+                waterPenaltyFactor = 0.6;
                 break;
 
-            case "temperate":     
+            case "temperate":
                 waterPenaltyFactor = 1.0;
                 break;
 
-            case "tundra":     
-                waterPenaltyFactor = 0.8;       
+            case "tundra":
+                waterPenaltyFactor = 0.8;
                 break;
         }
-        
+
         if (haswater == 0)
         {
             cropquality -= nowaterpenalty * waterPenaltyFactor;
         }
         if (isDrought == 1)
         {
-            cropquality -= 4 * nowaterpenalty*waterPenaltyFactor;
+            cropquality -= 4 * nowaterpenalty * waterPenaltyFactor;
         }
-
 
         if (isRunoff == 1)
         {
@@ -90,8 +155,9 @@ public class PlantScript : MonoBehaviour
             }
             environment.nutrientPpmRunoffed += (float)losses.Sum();
         }
-        else
+        if (haswater == 1 && isDrought == 0 && isRunoff == 0)
         {
+            BioMass += BioMassPerDay;
             double usecompound = 1 + (100 - land.nutrientRetention) / 1000.0;
             for (int i = 0; i < nutrients.Length; i++)
             {
@@ -145,13 +211,13 @@ public class PlantScript : MonoBehaviour
         nowaterpenalty = 0.02;
         nonutrientpenalty = 0.03;
 
-        (RUE_optimum, T_opt, H_opt, ideal, min_nitrogen, min_phosphorus, min_potassium,water_requirement) = biome switch
+        (RUE_optimum, T_opt, H_opt, ideal, min_nitrogen, min_phosphorus, min_potassium, water_requirement) = biome switch
         {
-            "arid" => (1.9, 35.5, 25.0, new double[] { 3, 1.7, 4.5 }, 30.0, 17.0, 45.0,3.0),//sorghum
-            "tropical" => (3.0, 30.0, 55.0, new double[] { 4, 2, 5 }, 36.0, 17.0, 45.0,10.0), // rice
-            "temperate" => (3.8, 27.5, 74.0, new double[] { 5, 1, 1 }, 40.0, 8.0, 8.0,6.0), // corn
-            "tundra" => (1.6, 12.0, 70.0, new double[] { 1, 2, 2 }, 24.0, 48.0, 48.0,4.0), //turnip
-            _ => (3.0, 25.0, 60.0, new double[] { 2, 1, 1 }, 20.0, 10.5, 10.5,5.0) // fallback
+            "arid" => (1.9, 35.5, 25.0, new double[] { 3, 1.7, 4.5 }, 30.0, 17.0, 45.0, 3.0),//sorghum
+            "tropical" => (3.0, 30.0, 55.0, new double[] { 4, 2, 5 }, 36.0, 17.0, 45.0, 10.0), // rice
+            "temperate" => (3.8, 27.5, 74.0, new double[] { 5, 1, 1 }, 40.0, 8.0, 8.0, 6.0), // corn
+            "tundra" => (1.6, 12.0, 70.0, new double[] { 1, 2, 2 }, 24.0, 48.0, 48.0, 4.0), //turnip
+            _ => (3.0, 25.0, 60.0, new double[] { 2, 1, 1 }, 20.0, 10.5, 10.5, 5.0) // fallback
         };
 
         if (isMonocrop == 1)
@@ -160,68 +226,10 @@ public class PlantScript : MonoBehaviour
         }
         else
         {
-            land.nutrientRetention = Math.Min(100, land.nutrientRetention + 15);
+            // land.nutrientRetent/ion = Math.Min(100, land.nutrientRetention + 15);
         }
     }
 
-    /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// ///
-    /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// ///
-    /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// ///
-    /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// /// ///
-
-    SpriteRenderer SR;
-    public UsableLandScript land;
-
-    public EnvironmentScript environment;
-
-    [SerializeField] private Sprite[] growthStageSprites = new Sprite[5];
-
-    int sprite_G_Stage = 1;
-
-    void Awake() // for local setups
-    {
-        SR = GetComponent<SpriteRenderer>();
-    }
-
-    void Start() // for interdependent setups
-    {
-
-    }
-
-    public void Init(int isMonocrop, string biome)
-    {
-        simulation_init(isMonocrop: isMonocrop, biome:biome);
-
-        sprite_G_Stage = PlantGrowthStage + 1;
-        SR.sprite = growthStageSprites[sprite_G_Stage];
-    }
-
-    void Update()
-    {
-        if (sprite_G_Stage != PlantGrowthStage + 1)
-        {
-            sprite_G_Stage = PlantGrowthStage + 1;
-            if (PlantGrowthStage == 6)
-            {
-                SR.sprite = growthStageSprites[4];
-            }
-            if (PlantGrowthStage == 4 || PlantGrowthStage == 5)
-            {
-                SR.sprite = growthStageSprites[3];
-            }
-            if (PlantGrowthStage == 1 || PlantGrowthStage == 2 || PlantGrowthStage == 3)
-            {
-                SR.sprite = growthStageSprites[2];
-            }
-            if (PlantGrowthStage == 0)
-            {
-                SR.sprite = growthStageSprites[1];
-            }
-        }
-    }
-
-    // Bach's utility functions
-    
     public string getdata(string filename = "weather.csv")
     {
         return "Okay";

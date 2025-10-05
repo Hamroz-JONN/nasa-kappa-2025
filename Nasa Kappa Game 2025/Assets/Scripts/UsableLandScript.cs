@@ -1,8 +1,11 @@
 using Unity.VisualScripting;
 using UnityEngine;
+using TMPro;
 
 public class UsableLandScript : MonoBehaviour
 {
+    public TextMeshProUGUI landInfo;
+
     // Units
     // int kgSoilPerM2 = 260;
     // int NitrogenMgPerM2 = 13000;
@@ -31,14 +34,15 @@ public class UsableLandScript : MonoBehaviour
     GameObject player;
     PlayerScript playerScript;
 
-    public GameObject carrot, wheat, corn;
+    public GameObject alfa, wheat, corn;
     string previousPlantName = "";
 
     public GameObject currentPlant = null;
-
     public PlantScript currentPlantScript = null;
 
     WaterReservoir waterReservoirScript;
+
+    public int soilArea = 72;
 
     // Nutrition variables in mg per 1 kg of soil
     // begins with poor values
@@ -47,7 +51,7 @@ public class UsableLandScript : MonoBehaviour
     public float ppm_phosphorus = 5; // 10 - 50 - 300 
     public float ppm_potassium = 5; // 150 - 300 - 1000
 
-    public float nutrientRetention = 0.97f; // 0.97 - after 10 days nutrient level goes from 100 to 73
+    public float nutrientRetention = 97; // 0.97 - after 10 days nutrient level goes from 100 to 73
 
     // 20 secs for plant to reach its max growth
     // 120 days
@@ -65,6 +69,8 @@ public class UsableLandScript : MonoBehaviour
 
     void Start()
     {
+        landInfo = GameObject.FindGameObjectWithTag("uiinfo").GetComponent<TextMeshProUGUI>();
+
         player = GameObject.FindWithTag("Player");
         playerScript = player.GetComponent<PlayerScript>();
         waterReservoirScript = GameObject.FindGameObjectWithTag("Reservoir").GetComponent<WaterReservoir>();
@@ -87,15 +93,15 @@ public class UsableLandScript : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.P))
         {
-            Plant(carrot);
+            Plant(alfa);
         }
-        if (Input.GetKeyDown(KeyCode.N))
+        if (Input.GetKeyDown(KeyCode.C))
         {
-            // Plant(carrot);
+            Plant(corn);
         }
         if (Input.GetKeyDown(KeyCode.M))
         {
-            // Plant(carrot);
+            Plant(wheat);
         }
 
         if (Input.GetKeyDown(KeyCode.H))
@@ -130,13 +136,16 @@ public class UsableLandScript : MonoBehaviour
             if (playerScript.money >= coverCropPrice)
             {
                 playerScript.money -= coverCropPrice;
-                nutrientRetention += 0.001f;
+                nutrientRetention += 1f;
             }
         }
     }
 
-    void SimOneDay() {
-        if (currentPlant != null) {
+    void SimOneDay()
+    {
+        if (currentPlant != null)
+        {
+            Debug.Log("level of water " + waterReservoirScript.currentWaterLevel);
             currentPlantScript.SimOneDay(
                 haswater: (waterReservoirScript.currentWaterLevel > 0f) ? 1 : 0,
                 isDrought: (_t < environment.droughtUntil) ? 1 : 0,
@@ -163,31 +172,35 @@ public class UsableLandScript : MonoBehaviour
             return;
         }
 
-        waterReservoirScript.areaPlanted += (int)(transform.localScale.x * transform.localScale.y);
+        waterReservoirScript.areaPlanted += (int)(soilArea);
 
         playerScript.money -= 75; // maybe different cost for each plant
 
         currentPlant = Instantiate(plant, transform);
         currentPlant.transform.SetParent(transform);
 
+        Debug.Log("PLANTED::: " + currentPlant.transform.position + " xx " + currentPlant.activeSelf);
+
         currentPlantScript = currentPlant.GetComponent<PlantScript>();
         currentPlantScript.land = this;
+        currentPlantScript.environment = environment;
 
-        // currentPlantScript.environment = environment;
         currentPlantScript.Init(
-            isMonocrop: (previousPlantName == plant.tag) ? 1 : 0, 
-            biome:""
-            // EnvironmentScript.ClimateClassifier.Classify(
-            //     PlayerPrefs.GetFloat("TheLat"),
-            //     PlayerPrefs.GetFloat("TheLon"))
+            isMonocrop: (previousPlantName == plant.tag) ? 1 : 0,
+            biome: "temperate"
+                // to-do get the lat and lon so player doesnt have to copy paste it on their own. maybe wake the unity game, and then Arunabh's code
+                // send some kinda API req? idk, ask
+
+                // EnvironmentScript.ClimateClassifier.Classify(
+                //     PlayerPrefs.GetFloat("TheLat"),
+                //     PlayerPrefs.GetFloat("TheLon"))
                 );
-        // currentPlantScript.Init();
         Debug.Log("Planted!");
     }
 
     public void PlantFinishedGrowing()
     {
-        waterReservoirScript.areaPlanted -= (int)(transform.localScale.x * transform.localScale.y);
+        waterReservoirScript.areaPlanted -= (int)(soilArea);
     }
 
     void HarvestAndSell()
@@ -202,7 +215,7 @@ public class UsableLandScript : MonoBehaviour
             return;
         }
 
-        int price = (int)currentPlantScript.cropquality*100;
+        int price = (int)currentPlantScript.cropquality * 100;
 
         playerScript.money += price;
         Debug.Log("Sold for " + price);
@@ -218,6 +231,7 @@ public class UsableLandScript : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D other)
     {
+        landInfo.text = "Nitrogen PPM: " + ppm_nitrogen + "\nPhosphorus PPM: " + ppm_phosphorus + "\nPotassium PPM: " + ppm_potassium + "\n\nSoil Retention% " + nutrientRetention;
         if (other.name == "Player")
         {
             interactable = true;
@@ -226,7 +240,8 @@ public class UsableLandScript : MonoBehaviour
 
     private void OnTriggerExit2D(Collider2D other)
     {
-        if (other.name == "Player") 
+        landInfo.text = "Go near a land to get its information";
+        if (other.name == "Player")
         {
             interactable = false;
         }

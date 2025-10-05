@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.UIElements;
 using System.Diagnostics;
+using Unity.Mathematics;
 
 public class LakeScript : MonoBehaviour
 {
@@ -62,8 +63,10 @@ public class LakeScript : MonoBehaviour
 
         playerScript.money -= pipePrice;
 
-        currentPipe = Instantiate(pipePrefab, transform);
-        currentPipe.transform.position = new Vector3(-16, -29.4f, 0);
+        currentPipe = Instantiate(pipePrefab, new Vector3(0, 0, 0), Quaternion.identity);
+        currentPipe.transform.SetParent(transform);
+        currentPipe.transform.localPosition = new Vector3(2, 0, 0);
+
     }
     
     private void OnTriggerEnter2D(Collider2D other)

@@ -9,6 +9,8 @@ TagManager:
   - Reservoir
   - Env
   - Carrot
+  - RainParticle
+  - uiinfo
   layers:
   - Default
   - TransparentFX

@@ -1,5 +1,6 @@
 using UnityEngine;
 using System;
+using TMPro;
 
 public class EnvironmentScript : MonoBehaviour
 {
@@ -9,27 +10,40 @@ public class EnvironmentScript : MonoBehaviour
 
     int fieldAmount = 10;
 
-    float _tDrought = 0;
-    int droughtDuration = 15;
-    int droughtOccurency = 200;
-    bool isDrought = false;
-
-    int runoffOccurency = 120; // in seconds
-    int rainDuration = 15; // in seconds
-    float _tRain = 0; // time passed since last rain
+    int runoffOccurency = 40; // in seconds
+    int rainDuration = 5; // in seconds
+    float nextRain = 10;
+    
     bool isRaining = false;
+    public float runoffUntill = -1;
+
+    float nextDrought = 30;
+    int droughtDuration = 10;
+    int droughtOccurency = 100;
+    bool isDrought = false;
+    public float droughtUntil = -1;
 
     GameObject[] grounds;
     GameObject cloud = null;
 
     public float lifetime = 0;
 
-    public float runoffUntill = -1;
-    public float droughtUntil = -1;
+    [SerializeField] GameObject rainParticle;
+
+    public TextMeshProUGUI sustText;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
+        sustText.text = sustainability.ToString();
+
+        PlayerPrefs.SetString("biome", ClimateClassifier.Classify(
+            PlayerPrefs.GetFloat("temp"),
+            PlayerPrefs.GetFloat("humidity"),
+            PlayerPrefs.GetFloat("sun"),
+            PlayerPrefs.GetFloat("rain")
+        ));
+
         grounds = GameObject.FindGameObjectsWithTag("Ground");
 
         cloud = transform.GetChild(0).gameObject;
@@ -39,168 +53,102 @@ public class EnvironmentScript : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        _tRain += Time.deltaTime;
-        _tDrought += Time.deltaTime;
+        lifetime += Time.deltaTime;
 
-        if (!isDrought && _tRain >= rainDuration && isRaining == true)
+        if (!isDrought && lifetime >= runoffUntill)
         {
             // StopRaining
             isRaining = false;
             cloud.SetActive(false);
+            rainParticle.SetActive(false);
         }
-        if (!isDrought && _tRain >= runoffOccurency && isRaining == false)
+        if (!isDrought && lifetime >= nextRain)
         {
-            _tRain = 0;
+            runoffUntill = lifetime + rainDuration;
+            nextRain = runoffUntill + runoffOccurency;
 
             cloud.SetActive(true);
+            rainParticle.SetActive(true);
 
-            SimRain(); // not even considered
-            SimRunoff();
             isRaining = true;
         }
 
-        if (!isRaining && _tDrought > droughtDuration && isDrought == true)
+        if (!isRaining && lifetime > droughtUntil)
         {
-            _tDrought = 0;
+
+
             isDrought = false;
         }
-        if (!isRaining && _tDrought > droughtOccurency && isDrought == false)
+        if (!isRaining && lifetime > nextDrought)
         {
-            _tDrought = 0;
+            droughtUntil = lifetime + droughtDuration;
+            nextDrought = droughtUntil + droughtOccurency;
             isDrought = true;
         }
 
         // sustainability is always recalculated based on the values its given
 
-        sustainability = 100f - Math.Min(0f, emissionKg - fieldAmount * 6) - nutrientPpmRunoffed;
+        sustainability = 100f - Math.Max(0f, emissionKg*0.1f) - nutrientPpmRunoffed;
+        sustText.text = "Sustainability "  + sustainability.ToString();
+        
         // nutrientPpmRunoffed;
         // emissionKg;
     }
 
-    void SimRain()
-    {
-        // foreach (GameObject g in grounds)
-        // {
-        //     UsableLandScript script = g.GetComponent<UsableLandScript>();
-        //     script.SimRain();
-        // }
-    }
-
-    void SimRunoff()
-    {
-        runoffUntill = lifetime + rainDuration;
-    }
-
-    void SimDrought()
-    {
-        droughtUntil = lifetime + droughtDuration;
-    }
 
     public static class ClimateClassifier
     {
-        // Entry point
-        public static string Classify(double lat, double lon)
+        public static string Classify(float tempC, float humidityPct, float ghiKWhPerM2, float rainMmPerYear)
         {
-            // Normalize longitude to [-180, 180]
-            lon = NormalizeLon(lon);
+            // --- Hard overrides for very clear cases ---
+            if (rainMmPerYear <= 300f || (rainMmPerYear <= 400f && ghiKWhPerM2 >= 1900f && humidityPct <= 40f && tempC >= 18f))
+                return "arid";
 
-            // 1) Desert masks (override everything)
-            if (IsDesert(lat, lon)) return "arid";
+            if (tempC <= 0f || (tempC <= 5f && ghiKWhPerM2 <= 1200f))
+                return "tundra";
 
-            // 2) Very cold high-latitude band (both hemispheres)
-            if (Math.Abs(lat) >= 60.0) return "tundra";
+            if (tempC >= 18f && humidityPct >= 70f && rainMmPerYear >= 1500f)
+                return "tropical";
 
-            // 3) Known very-wet tropical regions (Amazon, Congo, Maritime SE Asia)
-            if (IsRainyTropics(lat, lon)) return "tropical";
+            // --- Soft scoring for edge cases ---
+            float desertScore   = ScoreDesert(tempC, humidityPct, ghiKWhPerM2, rainMmPerYear);
+            float northScore    = ScoreNorth(tempC, ghiKWhPerM2);
+            float tropicalScore = ScoreTropical(tempC, humidityPct, ghiKWhPerM2, rainMmPerYear);
+            float normalScore   = 0.5f; // baseline
 
-            // 4) Low-latitude default tropics (simple band)
-            if (Math.Abs(lat) <= 15.0) return "tropical";
-
-            // 5) Otherwise
+            if (desertScore >= northScore && desertScore >= tropicalScore && desertScore >= normalScore) return "arid";
+            if (northScore  >= desertScore && northScore  >= tropicalScore && northScore  >= normalScore) return "tundra";
+            if (tropicalScore >= desertScore && tropicalScore >= northScore && tropicalScore >= normalScore) return "tropical";
             return "temperate";
         }
 
-        // ---------- Helpers ----------
-
-        private static double NormalizeLon(double lon)
+        // ---------- scoring helpers ----------
+        static float ScoreDesert(float t, float hum, float ghi, float rain)
         {
-            // bring into [-180, 180]
-            while (lon > 180) lon -= 360;
-            while (lon < -180) lon += 360;
-            return lon;
+            float rainTerm = 1f - Clamp01(rain / 400f);
+            float sunTerm  = Clamp01((ghi - 1600f) / 800f);
+            float tempTerm = Clamp01((t - 18f) / 17f);
+            float dryTerm  = 1f - Clamp01(hum / 60f);
+            return 0.45f * rainTerm + 0.25f * sunTerm + 0.20f * tempTerm + 0.10f * dryTerm;
         }
 
-        private static bool InBox(double lat, double lon, double latMin, double latMax, double lonMin, double lonMax)
+        static float ScoreNorth(float t, float ghi)
         {
-            return lat >= latMin && lat <= latMax && lon >= lonMin && lon <= lonMax;
+            float coldTerm = 1f - Clamp01((t - 0f) / 12f);
+            float lowSun   = 1f - Clamp01((ghi - 1100f) / 700f);
+            return 0.65f * coldTerm + 0.35f * lowSun;
         }
 
-        private static bool IsDesert(double lat, double lon)
+        static float ScoreTropical(float t, float hum, float ghi, float rain)
         {
-            // --- Africa ---
-            // Sahara (broad, includes Sahara core)
-            if (InBox(lat, lon, 15, 32, -18, 35)) return true;
-            // Arabian Peninsula (Rub' al Khali etc.)
-            if (InBox(lat, lon, 12, 30, 34, 60)) return true;
-            // Kalahari / Namib
-            if (InBox(lat, lon, -30, -15, 10, 28)) return true;
-
-            // --- Middle East / Central & South Asia ---
-            // Thar Desert (India/Pakistan)
-            if (InBox(lat, lon, 23, 32, 68, 78)) return true;
-            // Karakum & Kyzylkum (Turkmenistan/Uzbekistan/Kazakhstan)
-            if (InBox(lat, lon, 36, 46, 54, 70)) return true;
-            // Iranian Plateau arid interior (broad brush)
-            if (InBox(lat, lon, 25, 36, 45, 63)) return true;
-
-            // --- East Asia ---
-            // Gobi (cold desert, still "desert type")
-            if (InBox(lat, lon, 37, 45, 90, 110)) return true;
-
-            // --- Australia ---
-            // Great Victoria / Great Sandy / Simpson (central arid)
-            if (InBox(lat, lon, -30, -20, 120, 140)) return true;
-            // Western Australian interior
-            if (InBox(lat, lon, -30, -18, 114, 120)) return true;
-
-            // --- North America ---
-            // Mojave/Sonoran/Chihuahuan band (broad brush US SW + N Mexico)
-            if (InBox(lat, lon, 24, 38, -117, -103)) return true;
-            // Great Basin (dry interior)
-            if (InBox(lat, lon, 36, 43, -120, -112)) return true;
-
-            // --- South America ---
-            // Atacama Desert (Chile)
-            if (InBox(lat, lon, -30, -18, -75, -68)) return true;
-            // Patagonian Steppe (dry; treat as desert type for gameplay)
-            if (InBox(lat, lon, -50, -42, -72, -64)) return true;
-
-            return false;
+            float warmTerm = Clamp01((t - 18f) / 10f);
+            float humTerm  = Clamp01((hum - 65f) / 20f);
+            float rainTerm = Clamp01((rain - 1000f) / 1000f);
+            float sunTerm  = 1f - Clamp01(Mathf.Abs( Mathf.Clamp(ghi, 1500f, 2000f) - ghi ) / 600f);
+            return 0.35f * warmTerm + 0.30f * humTerm + 0.25f * rainTerm + 0.10f * sunTerm;
         }
 
-        private static bool IsRainyTropics(double lat, double lon)
-        {
-            // Amazon Basin (very wet core)
-            if (InBox(lat, lon, -15, 5, -75, -50)) return true;
-
-            // Congo Basin (DRC region)
-            if (InBox(lat, lon, -10, 5, 12, 31)) return true;
-
-            // Maritime SE Asia (Indonesia/Malaysia/PNG tropics)
-            if (InBox(lat, lon, -10, 10, 95, 150)) return true;
-
-            // Western Africa Gulf of Guinea belt
-            if (InBox(lat, lon, -5, 8, -10, 15)) return true;
-
-            // Eastern India–Bangladesh–SE Asia monsoon core (lowland humid)
-            if (InBox(lat, lon, 5, 23, 80, 105)) return true;
-
-            // Central America tropical belt (Caribbean side)
-            if (InBox(lat, lon, 7, 18, -92, -77)) return true;
-
-            return false;
-        }
+        static float Clamp01(float x) => (x < 0f) ? 0f : (x > 1f ? 1f : x);
     }
-
 }
 
